@@ -285,7 +285,7 @@ function run(subs, sel)
 			aegisub.dialog.display(conf_help, {"OK"})
 			aegisub.progress.title (script_name)
 		end
-	until button == "Execute" or button == "Cancel"
+	until button == "Execute" or button == "Cancel" or button == false
 	--Execute function
 	if button == "Execute" then
 		local err = accelerate(subs, sel, config)
