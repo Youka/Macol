@@ -2,7 +2,7 @@
 script_name = "SSB export"
 script_description = "Exports editor content (ASS) to a SSB file."
 script_author = "Youka"
-script_version = "1.0 (31th December 2013)"
+script_version = "1.1 (14th January 2014)"
 
 -- Check cancel state and terminate process if set
 local function check_cancel()
@@ -13,9 +13,16 @@ end
 
 -- Output error message and terminate process
 local function error(s, ...)
-	if type(s) == "string" then
-		aegisub.log(0, s, ...)
-		aegisub.cancel()
+	aegisub.log(0, s, ...)
+	aegisub.cancel()
+end
+
+-- Is Aegisub version 3+?
+local function is_aegi3()
+	if aegisub.decode_path then
+		return true
+	else
+		return false, "Aegisub 3+ required"
 	end
 end
 
@@ -27,14 +34,11 @@ aegisub.register_macro(script_name, script_description, function(subs)
 		aegisub.progress.title(script_name)
 		-- Convert ASS to SSB (rewrite of converter used in SSBRenderer's Aegisub interface)
 		aegisub.progress.task("Convert editor content to SSB")
-		local ssb, current_section = "", 0	-- Sections: 0 = NONE, 1 = META, 2 = FRAME, 3 = STYLES, 4 = EVENTS
+		local ssb, current_section = "", ""
 		local function set_section(section)
+			-- Change current section to given value if needed
 			if current_section ~= section then
-				ssb = ssb .. (
-						ssb:len() == 0 and
-						(section == 1 and "#META\n" or section == 2 and "#FRAME\n" or section == 3 and "#STYLES\n" or section == 4 and "#EVENTS\n") or
-						(section == 1 and "\n#META\n" or section == 2 and "\n#FRAME\n" or section == 3 and "\n#STYLES\n" or section == 4 and "\n#EVENTS\n")
-					)
+				ssb = string.format(ssb:len() == 0 and "%s%s\n" or "%s\n%s\n", ssb, section)
 				current_section = section
 			end
 		end
@@ -43,26 +47,26 @@ aegisub.register_macro(script_name, script_description, function(subs)
 			local line = subs[i].raw
 			-- Save meta
 			if line:find("^Title: ") then
-				set_section(1)
+				set_section("#META")
 				ssb = string.format("%s%s\n", ssb, line)
 			elseif line:find("^Original Script: ") then
-				set_section(1)
+				set_section("#META")
 				ssb = string.format("%sAuthor: %s\n", ssb, line:sub(18))
 			elseif line:find("^Update Details: ") then
-				set_section(1)
+				set_section("#META")
 				ssb = string.format("%sDescription: %s\n", ssb, line:sub(17))
 			-- Save frame
 			elseif line:find("^PlayResX: ") then
-				set_section(2)
+				set_section("#FRAME")
 				ssb = string.format("%sWidth: %s\n", ssb, line:sub(11))
 			elseif line:find("^PlayResY: ") then
-				set_section(2)
+				set_section("#FRAME")
 				ssb = string.format("%sHeight: %s\n", ssb, line:sub(11))
 			-- Save style
 			elseif line:find("^SSBStyle: ") then
 				local name, content = line:match("^SSBStyle: (.-),(.*)$")
 				if content then
-					set_section(3)
+					set_section("#STYLES")
 					ssb = string.format("%s%s: %s\n", ssb, name, content)
 				end
 			elseif line:find("^Style: ") then
@@ -74,7 +78,7 @@ aegisub.register_macro(script_name, script_description, function(subs)
 						alignment, margin_l, margin_r, margin_v,
 						encoding = line:match("^Style: " .. string.rep("(.-),", 22) .. "(.*)$")
 				if encoding then
-					set_section(3)
+					set_section("#STYLES")
 					ssb = string.format("%s%s: {font-family=%s;font-size=%s;color=%s%s%s;alpha=%s;kcolor=%s%s%s;line-color=%s%s%s;line-alpha=%s;font-style=%s;scale-x=%s;scale-y=%s;font-space-h=%s;rotate-z=%s;line-width=%s;align=%s;margin-h=%s;margin-v=%s}\n",
 												ssb, name, fontname, fontsize,
 												color1:sub(9,10), color1:sub(7,8), color1:sub(5,6), color1:sub(3,4),
@@ -86,14 +90,30 @@ aegisub.register_macro(script_name, script_description, function(subs)
 				end
 			-- Save event
 			elseif line:find("^Comment: ") or line:find("^Dialogue: ") then
-				local layer, start_time, end_time, style, name, margin_l, margin_r, margin_v, effect, text
-						= line:match((line:find("^C") and "^Comment: " or "^Dialogue: ") .. string.rep("(.-),", 9) .. "(.*)$")
+				local layer, start_time, end_time, style, name, margin_l, margin_r, margin_v, effect, text = line:match((line:find("^C") and "^Comment: " or "^Dialogue: ") .. string.rep("(.-),", 9) .. "(.*)$")
 				if text then
-					set_section(4)
-					if line:find("^C") then
-						ssb = ssb .. "// "
+					set_section("#EVENTS")
+					local function ass_to_ssb_time(t)
+						local h, m, s, ms = t:match("^0*(%d+):0*(%d+):0*(%d+).0*(%d*)$")
+						if ms then
+							if h ~= "0" then
+								return string.format("%s:%s:%s.%s0", h, m, s, ms)
+							elseif m ~= "0" then
+								return string.format("%s:%s.%s0", m, s, ms)
+							elseif s ~= "0" then
+								return string.format("%s.%s0", s, ms)
+							else
+								return string.format("%s0", ms)
+							end
+						else
+							return t .. "0"
+						end
 					end
-					ssb = string.format("%s%s0-%s0|%s|%s|%s\n", ssb, start_time, end_time, style, name, text)
+					if line:find("^C") then
+						ssb = string.format("// %s%s-%s|%s|%s|%s\n", ssb, ass_to_ssb_time(start_time), ass_to_ssb_time(end_time), style, name, text)
+					else
+						ssb = string.format("%s%s-%s|%s|%s|%s\n", ssb, ass_to_ssb_time(start_time), ass_to_ssb_time(end_time), style, name, text)
+					end
 				end
 			end
 			-- Update progress bar
@@ -132,12 +152,6 @@ aegisub.register_macro(script_name, script_description, function(subs)
 			end
 		end
 	end,
-	-- Validate macro by Aegisub version 3+
-	function()
-		if aegisub.decode_path then
-			return true
-		else
-			return false, "Aegisub 3+ required"
-		end
-	end
+	-- Validate macro by Aegisub version
+	is_aegi3
 )
