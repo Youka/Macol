@@ -183,9 +183,71 @@ aegisub.register_macro("SSB export", "Exports editor content to SSB", function(s
 aegisub.register_macro("SSB import", "Imports editor content from SSB", function(subs)
 		-- Set progress title
 		aegisub.progress.title("SSB import")
-		
-		-- TODO
-		
+		-- Get input filename by dialog
+		aegisub.progress.task("Load file")
+		local filename = aegisub.dialog.open("Load SSB file", "", "", "SSB files (.ssb)|.ssb")
+		if filename then
+			-- Open input file
+			local file = io.open(filename, "w")
+			if file then
+				-- Convert SSB to ASS
+				aegisub.progress.task("Convert SSB to editor content")
+				local ass = {
+					meta = {
+						title = "",
+						original_script = "",
+						update_details = "",
+						version = "",
+						playres_x = "",
+						playres_y = ""
+					},
+					styles = {},
+					events = {}
+				}
+				aegisub.progress.set(0)
+				for line in file:lines() do
+					-- Save meta
+					-- TODO
+					-- Save style
+					-- TODO
+					-- Save event
+					-- TODO
+					-- Check process cancelling
+					check_cancel()
+				end
+				aegisub.progress.set(100)
+				file:close()
+				-- Clear editor content
+				subs.deleterange(1, subs.n)
+				-- Write meta to editor
+				if ass.meta.title ~= "" then
+					subs.append({class = "info", key = "Title", value = ass.meta.title})
+				end
+				if ass.meta.original_script ~= "" then
+					subs.append({class = "info", key = "Original Script", value = ass.meta.original_script})
+				end
+				if ass.meta.update_details ~= "" then
+					subs.append({class = "info", key = "Update Details", value = ass.meta.update_details})
+				end
+				if ass.meta.version ~= "" then
+					subs.append({class = "info", key = "Version", value = ass.meta.version})
+				end
+				if ass.meta.playres_x ~= "" then
+					subs.append({class = "info", key = "PlayResX", value = ass.meta.playres_x})
+				end
+				if ass.meta.playres_y ~= "" then
+					subs.append({class = "info", key = "PlayResY", value = ass.meta.playres_y})
+				end
+				-- Write styles to editor
+				-- TODO
+				-- Write events to editor
+				-- TODO
+				-- Set undo point
+				aegisub.set_undo_point("Restore old editor content")
+			else
+				error("Couldn't read file %q!", filename)
+			end
+		end
 	end,
 	-- Validate macro by Aegisub version
 	is_aegi3
