@@ -121,7 +121,7 @@ aegisub.register_macro("SSB export", "Exports editor content to SSB", function(s
 		end
 		-- Get output filename by dialog
 		aegisub.progress.task("Save file")
-		local filename = aegisub.dialog.save("Save SSB file", "", "", "SSB files (.ssb)|.ssb")
+		local filename = aegisub.dialog.save("Save SSB file", "", "", "SSB files (.ssb)|*.ssb")
 		if filename then
 			-- Create output file
 			local file = io.open(filename, "w")
@@ -185,14 +185,14 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 		aegisub.progress.title("SSB import")
 		-- Get input filename by dialog
 		aegisub.progress.task("Load file")
-		local filename = aegisub.dialog.open("Load SSB file", "", "", "SSB files (.ssb)|.ssb")
+		local filename = aegisub.dialog.open("Load SSB file", "", "", "SSB files (.ssb)|*.ssb")
 		if filename then
 			-- Open input file
-			local file = io.open(filename, "w")
+			local file = io.open(filename, "r")
 			if file then
 				-- Convert SSB to ASS
 				aegisub.progress.task("Convert SSB to editor content")
-				local ass = {
+				local ass, section = {
 					meta = {
 						title = "",
 						original_script = "",
@@ -203,22 +203,46 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 					},
 					styles = {},
 					events = {}
-				}
+				}, "NONE"
 				aegisub.progress.set(0)
 				for line in file:lines() do
+					-- Update section
+					if line:find("^#%u+") then
+						section = line:match("^#(%u+)")
 					-- Save meta
-					-- TODO
+					elseif section == "META" then
+						if line:find("^Title: ") then
+							ass.meta.title = line:sub(8)
+						elseif line:find("^Author: ") then
+							ass.meta.original_script = line:sub(9)
+						elseif line:find("^Description: ") then
+							ass.meta.update_details = line:sub(14)
+						elseif line:find("^Version: ") then
+							ass.meta.version = line:sub(10)
+						end
+					-- Save frame
+					elseif section == "FRAME" then
+						if line:find("^Width: ") then
+							ass.meta.playres_x = line:sub(8)
+						elseif line:find("^Height: ") then
+							ass.meta.playres_y = line:sub(9)
+						end
 					-- Save style
-					-- TODO
+					elseif section == "STYLES" then
+						-- TODO
 					-- Save event
-					-- TODO
+					elseif section == "EVENTS" then
+						-- TODO
+					end
 					-- Check process cancelling
 					check_cancel()
 				end
 				aegisub.progress.set(100)
 				file:close()
 				-- Clear editor content
-				subs.deleterange(1, subs.n)
+				while subs.n > 0 do
+					subs.delete(1)
+				end
 				-- Write meta to editor
 				if ass.meta.title ~= "" then
 					subs.append({class = "info", key = "Title", value = ass.meta.title})
@@ -243,7 +267,7 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 				-- Write events to editor
 				-- TODO
 				-- Set undo point
-				aegisub.set_undo_point("Restore old editor content")
+				aegisub.set_undo_point("SSB import")
 			else
 				error("Couldn't read file %q!", filename)
 			end
