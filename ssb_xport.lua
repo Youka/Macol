@@ -78,14 +78,14 @@ aegisub.register_macro("SSB export", "Exports editor content to SSB", function(s
 						alignment, margin_l, margin_r, margin_v,
 						encoding = line:match("^Style: " .. string.rep("(.-),", 22) .. "(.*)$")
 				if encoding then
-					ssb.styles[name] = string.format("{font-family=%s;font-size=%s;color=%s%s%s;alpha=%s;kcolor=%s%s%s;line-color=%s%s%s;line-alpha=%s;font-style=%s;scale-x=%s;scale-y=%s;font-space-h=%s;rotate-z=%s;line-width=%s;align=%s;margin-h=%s;margin-v=%s}",
+					ssb.styles[name] = string.format("{font-family=%s;font-size=%s;color=%s%s%s;alpha=%s;kcolor=%s%s%s;line-color=%s%s%s;line-alpha=%s;font-style=%s;scale-x=%s;scale-y=%s;font-space-h=%s;rotate-z=%s;mode=%s;line-width=%s;align=%s;margin-h=%s;margin-v=%s}",
 											fontname, fontsize,
 											color1:sub(9,10), color1:sub(7,8), color1:sub(5,6), color1:sub(3,4),
 											color2:sub(9,10), color2:sub(7,8), color2:sub(5,6),
 											color3:sub(9,10), color3:sub(7,8), color3:sub(5,6), color3:sub(3,4),
 											(bold == "-1" and "b" or "") .. (italic == "-1" and "i" or "") .. (underline == "-1" and "u" or "") .. (strikeout == "-1" and "s" or ""),
 											scale_x, scale_y, spacing, angle,
-											outline, alignment, margin_l, margin_v)
+											borderstyle == "3" and "boxed" or "fill", outline, alignment, margin_l, margin_v)
 				end
 			-- Save event
 			elseif line:find("^Comment: ") or line:find("^Dialogue: ") then
@@ -229,7 +229,19 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 						end
 					-- Save style
 					elseif section == "STYLES" then
-						-- TODO
+						local name, content = line:match("^([^:]-): (.*)$")
+						if content then
+							local fontname, fontsize,
+								color, alpha, kcolor, line_color, line_alpha,
+								fontstyle, scale_x, scale_y, spacing, angle,
+								mode, line_width, alignment, margin_h, margin_v = content:match("{font-family=(.-);font-size=(.-);color=(.-);alpha=(.-);kcolor=(.-);line-color=(.-);line-alpha=(.-);font-style=(.-);scale-x=(.-);scale-y=(.-);font-space-h=(.-);rotate-z=(.-);mode=(.-);line-width=(.-);align=(.-);margin-h=(.-);margin-v=(.-)}")
+							if margin_v then
+								ass.styles[name] = {is_ssb = false, text = string.format("")}
+								-- TODO
+							else
+								ass.styles[name] = {is_ssb = true, text = content}
+							end
+						end
 					-- Save event
 					elseif section == "EVENTS" then
 						-- TODO
@@ -263,9 +275,13 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 					subs.append({class = "info", key = "PlayResY", value = ass.meta.playres_y})
 				end
 				-- Write styles to editor
-				-- TODO
+				if next(ass.styles) then
+					-- TODO
+				end
 				-- Write events to editor
-				-- TODO
+				if ass.events[1] then
+					-- TODO
+				end
 				-- Set undo point
 				aegisub.set_undo_point("SSB import")
 			else
