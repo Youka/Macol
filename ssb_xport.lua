@@ -257,7 +257,46 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 						end
 					-- Save event
 					elseif section == "EVENTS" then
-						-- TODO
+						local comment, start_time, end_time, style, note, text = line:match("^([/%s]*)(.-)-(.-)|(.-)|(.-)|(.*)")
+						if text then
+							local function ssb_to_ass_time(t)
+								local h, m, s, ms = t:match("(%d+):(%d+):(%d+)%.(%d+)")
+								if ms then
+									return ms + s * 1000 + m * 60000 + h * 3600000
+								else
+									m, s, ms = t:match("(%d+):(%d+)%.(%d+)")
+									if ms then
+										return ms + s * 1000 + m * 60000
+									else
+										s, ms = t:match("(%d+)%.(%d+)")
+										if ms then
+											return ms + s * 1000
+										else
+											ms = tonumber(t)
+											if ms then
+												return ms
+											else
+												return 0
+											end
+										end
+									end
+								end
+							end
+							subs.append({
+								class = "dialogue",
+								comment = comment:find("^//") ~= nil,
+								layer = 0,
+								start_time = ssb_to_ass_time(start_time),
+								end_time = ssb_to_ass_time(end_time),
+								style = style,
+								actor = note,
+								margin_l = 0,
+								margin_r = 0,
+								margin_t = 0,
+								effect = "",
+								text = text
+							})
+						end
 					end
 					-- Update progress bar
 					local file_pos = file:seek()
