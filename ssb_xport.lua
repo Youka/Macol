@@ -2,7 +2,7 @@
 script_name = "SSB xport"
 script_description = "Ex-/imports editor content (ASS) to/from a SSB file."
 script_author = "Youka"
-script_version = "1.0 (1st February 2014)"
+script_version = "1.0 (2st February 2014)"
 
 -- Check cancel state and terminate process if set
 local function check_cancel()
@@ -190,20 +190,13 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 			-- Open input file
 			local file = io.open(filename, "r")
 			if file then
+				-- Clear editor content
+				while subs.n > 0 do
+					subs.delete(1)
+				end
 				-- Convert SSB to ASS
 				aegisub.progress.task("Convert SSB to editor content")
-				local ass, section = {
-					meta = {
-						title = "",
-						original_script = "",
-						update_details = "",
-						version = "",
-						playres_x = "",
-						playres_y = ""
-					},
-					styles = {},
-					events = {}
-				}, "NONE"
+				local section = "NONE"
 				aegisub.progress.set(0)
 				for line in file:lines() do
 					-- Update section
@@ -212,76 +205,68 @@ aegisub.register_macro("SSB import", "Imports editor content from SSB", function
 					-- Save meta
 					elseif section == "META" then
 						if line:find("^Title: ") then
-							ass.meta.title = line:sub(8)
+							subs.append({class = "info", key = "Title", value = line:sub(8)})
 						elseif line:find("^Author: ") then
-							ass.meta.original_script = line:sub(9)
+							subs.append({class = "info", key = "Original Script", value = line:sub(9)})
 						elseif line:find("^Description: ") then
-							ass.meta.update_details = line:sub(14)
+							subs.append({class = "info", key = "Update Details", value = line:sub(14)})
 						elseif line:find("^Version: ") then
-							ass.meta.version = line:sub(10)
+							subs.append({class = "info", key = "Version", value = line:sub(10)})
 						end
 					-- Save frame
 					elseif section == "FRAME" then
 						if line:find("^Width: ") then
-							ass.meta.playres_x = line:sub(8)
+							subs.append({class = "info", key = "PlayResX", value = line:sub(8)})
 						elseif line:find("^Height: ") then
-							ass.meta.playres_y = line:sub(9)
+							subs.append({class = "info", key = "PlayResY", value = line:sub(9)})
 						end
 					-- Save style
 					elseif section == "STYLES" then
-						local name, content = line:match("^([^:]-): (.*)$")
-						if content then
-							local fontname, fontsize,
-								color, alpha, kcolor, line_color, line_alpha,
-								fontstyle, scale_x, scale_y, spacing, angle,
-								mode, line_width, alignment, margin_h, margin_v = content:match("{font-family=(.-);font-size=(.-);color=(.-);alpha=(.-);kcolor=(.-);line-color=(.-);line-alpha=(.-);font-style=(.-);scale-x=(.-);scale-y=(.-);font-space-h=(.-);rotate-z=(.-);mode=(.-);line-width=(.-);align=(.-);margin-h=(.-);margin-v=(.-)}")
-							if margin_v then
-								ass.styles[name] = {is_ssb = false, text = string.format("")}
-								-- TODO
-							else
-								ass.styles[name] = {is_ssb = true, text = content}
-							end
+						local name, fontname, fontsize,
+							color, alpha, kcolor, line_color, line_alpha,
+							fontstyle, scale_x, scale_y, spacing, angle,
+							mode, line_width, alignment, margin_h, margin_v =
+							line:match("^(.-): {font%-family=(.-);font%-size=(.-);color=(.-);alpha=(.-);kcolor=(.-);line%-color=(.-);line%-alpha=(.-);font%-style=(.-);scale%-x=(.-);scale%-y=(.-);font%-space%-h=(.-);rotate%-z=(.-);mode=(.-);line%-width=(.-);align=(.-);margin%-h=(.-);margin%-v=(.-)}")
+						if margin_v then
+							subs.append({
+								class = "style",
+								name = name,
+								fontname = fontname,
+								fontsize = tonumber(fontsize),
+								color1 = string.format("&H%02s%02s%02s%02s", alpha, color:sub(5,6), color:sub(3,4), color:sub(1,2)),
+								color2 = string.format("&HFF%02s%02s%02s", kcolor:sub(5,6), kcolor:sub(3,4), kcolor:sub(1,2)),
+								color3 = string.format("&H%02s%02s%02s%02s", line_alpha, line_color:sub(5,6), line_color:sub(3,4), line_color:sub(1,2)),
+								color4 = "&HFF000000",
+								bold = fontstyle:find("b") ~= nil,
+								italic = fontstyle:find("i") ~= nil,
+								underline = fontstyle:find("u") ~= nil,
+								strikeout = fontstyle:find("s") ~= nil,
+								scale_x = tonumber(scale_x),
+								scale_y = tonumber(scale_y),
+								spacing = tonumber(spacing),
+								angle = tonumber(angle),
+								borderstyle = mode == "boxed" and 3 or 1,
+								outline = tonumber(line_width),
+								shadow = 0,
+								align = tonumber(alignment),
+								margin_l = tonumber(margin_h),
+								margin_r = tonumber(margin_h),
+								margin_t = tonumber(margin_v),
+								encoding = 1
+							})
 						end
 					-- Save event
 					elseif section == "EVENTS" then
 						-- TODO
 					end
+					-- Update progress bar
+					local file_pos = file:seek()
+					aegisub.progress.set(file_pos / file:seek("end") * 100)
+					file:seek("set", file_pos)
 					-- Check process cancelling
 					check_cancel()
 				end
-				aegisub.progress.set(100)
 				file:close()
-				-- Clear editor content
-				while subs.n > 0 do
-					subs.delete(1)
-				end
-				-- Write meta to editor
-				if ass.meta.title ~= "" then
-					subs.append({class = "info", key = "Title", value = ass.meta.title})
-				end
-				if ass.meta.original_script ~= "" then
-					subs.append({class = "info", key = "Original Script", value = ass.meta.original_script})
-				end
-				if ass.meta.update_details ~= "" then
-					subs.append({class = "info", key = "Update Details", value = ass.meta.update_details})
-				end
-				if ass.meta.version ~= "" then
-					subs.append({class = "info", key = "Version", value = ass.meta.version})
-				end
-				if ass.meta.playres_x ~= "" then
-					subs.append({class = "info", key = "PlayResX", value = ass.meta.playres_x})
-				end
-				if ass.meta.playres_y ~= "" then
-					subs.append({class = "info", key = "PlayResY", value = ass.meta.playres_y})
-				end
-				-- Write styles to editor
-				if next(ass.styles) then
-					-- TODO
-				end
-				-- Write events to editor
-				if ass.events[1] then
-					-- TODO
-				end
 				-- Set undo point
 				aegisub.set_undo_point("SSB import")
 			else
